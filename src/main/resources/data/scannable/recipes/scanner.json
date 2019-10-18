@@ -1,5 +1,5 @@
 {
-  "type": "forge:ore_shaped",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "I I",
     "BRB",
@@ -7,23 +7,19 @@
   ],
   "key": {
     "I": {
-      "type": "forge:ore_dict",
-      "ore": "ingotIron"
+      "tag": "forge:ingots/iron"
     },
     "B": {
       "item": "minecraft:iron_bars"
     },
     "R": {
-      "type": "forge:ore_dict",
-      "ore": "dustRedstone"
+      "tag": "forge:dusts/redstone"
     },
     "G": {
-      "type": "forge:ore_dict",
-      "ore": "ingotGold"
+      "tag": "forge:ingots/gold"
     },
     "Q": {
-      "type": "forge:ore_dict",
-      "ore": "gemQuartz"
+      "tag": "forge:gems/quartz"
     }
   },
   "result": {

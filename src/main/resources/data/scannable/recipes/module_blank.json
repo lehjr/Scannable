@@ -1,5 +1,5 @@
 {
-  "type": "forge:ore_shaped",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "GGG",
     "CRC",
@@ -7,19 +7,16 @@
   ],
   "key": {
     "G": {
-      "type": "forge:ore_dict",
-      "ore": "dyeGreen"
+      "tag": "forge:dyes/green"
     },
     "C": {
       "item": "minecraft:clay_ball"
     },
     "R": {
-      "type": "forge:ore_dict",
-      "ore": "dustRedstone"
+      "tag": "forge:dusts/redstone"
     },
     "N": {
-      "type": "forge:ore_dict",
-      "ore": "nuggetGold"
+      "tag": "forge:nuggets/gold"
     }
   },
   "result": {
