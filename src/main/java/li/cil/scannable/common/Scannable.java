@@ -2,44 +2,112 @@ package li.cil.scannable.common;
 
 
 import li.cil.scannable.api.API;
+import li.cil.scannable.client.ScanManager;
+import li.cil.scannable.client.gui.GuiScanner;
+import li.cil.scannable.client.renderer.OverlayRenderer;
+import li.cil.scannable.client.renderer.ScannerRenderer;
+import li.cil.scannable.common.capabilities.CapabilityScanResultProvider;
+import li.cil.scannable.common.config.ClientConfig;
+import li.cil.scannable.common.config.CommonConfig;
+import li.cil.scannable.common.config.ConfigHelper;
 import li.cil.scannable.common.config.Constants;
+import li.cil.scannable.common.container.ContainerScanner;
+import li.cil.scannable.common.container.ContainerTypes;
+import li.cil.scannable.common.init.Items;
+import li.cil.scannable.network.Network;
+import li.cil.scannable.network.packets.ClientOnLoginPacket;
+import net.minecraft.client.gui.ScreenManager;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.inventory.container.ContainerType;
+import net.minecraft.item.Item;
+import net.minecraft.util.Hand;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.extensions.IForgeContainerType;
+import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.SidedProxy;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.network.PacketDistributor;
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
  * Entry point for FML.
  */
-@Mod(modid = API.MOD_ID, version = API.MOD_VERSION, name = Constants.MOD_NAME,
-     useMetadata = true)
+@Mod(API.MOD_ID)
 public final class Scannable {
     // --------------------------------------------------------------------- //
     // FML / Forge
 
-    @Mod.Instance(API.MOD_ID)
-    public static Scannable instance;
+    public Scannable() {
+        // Initialize API.
+        API.creativeTab = new CreativeTab();
 
-    @SidedProxy(clientSide = Constants.PROXY_CLIENT, serverSide = Constants.PROXY_SERVER)
-    public static ProxyCommon proxy;
+        log = LogManager.getLogger(API.MOD_ID);
 
-    @Mod.EventHandler
-    public void onPreInit(final FMLPreInitializationEvent event) {
-        log = event.getModLog();
-        proxy.onPreInit(event);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CommonConfig.COMMON_SPEC, ConfigHelper.setupConfigFile(API.MOD_ID+"-common.toml").getAbsolutePath());
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.CLIENT_SPEC, ClientConfig.clientFile.getAbsolutePath());
+
+        // Register the setup method for modloading
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
+        // Register the setupClient method for modloading
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setupClient);
+
+        // Register ourselves for server, registry and other game events we are interested in
+        MinecraftForge.EVENT_BUS.register(this);
+
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modEventBus.register(this);
     }
 
-    @Mod.EventHandler
-    public void onInit(final FMLInitializationEvent event) {
-        proxy.onInit(event);
+    // common
+    private void setup(final FMLCommonSetupEvent event) {
+        Network.registerPackets();
+
+        // Initialize capabilities.
+        CapabilityScanResultProvider.register();
     }
 
-    @Mod.EventHandler
-    public void onPostInit(final FMLPostInitializationEvent event) {
-        proxy.onPostInit(event);
+    // client
+    private void setupClient(final FMLClientSetupEvent event) {
+        MinecraftForge.EVENT_BUS.register(ScannerRenderer.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(OverlayRenderer.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(ScanManager.INSTANCE);
+        ScreenManager.registerFactory(ContainerTypes.SCANNER_CONTAINER_TYPE, GuiScanner::new);
+//
     }
+
+    @SubscribeEvent
+    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        PlayerEntity player = event.getPlayer();
+        if (player != null) {
+            Network.CHANNEL_INSTANCE.send(PacketDistributor.PLAYER.with(() -> (ServerPlayerEntity) player), new ClientOnLoginPacket());
+        }
+    }
+
+
+    @SubscribeEvent
+    public void handleRegisterItemsEvent(final RegistryEvent.Register<Item> event) {
+        Items.register(event.getRegistry());
+    }
+
+    @SubscribeEvent
+    public void registerContainerTypes(final RegistryEvent.Register<ContainerType<?>> event) {
+        event.getRegistry().register(
+                // the IForgeContainerType only needed for extra data
+                IForgeContainerType.create((windowId, playerInventory, data) -> {
+                    Hand typeIndex = Hand.values()[data.readInt()];
+                    return new ContainerScanner(windowId, playerInventory, typeIndex);
+                }).setRegistryName(Constants.SCANNER_CONTAINER_TYPE__REG_NAME));
+    }
+
 
     // --------------------------------------------------------------------- //
 

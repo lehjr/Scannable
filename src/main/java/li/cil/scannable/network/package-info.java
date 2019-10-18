@@ -1,6 +1,6 @@
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
-package li.cil.scannable.common.network;
+package li.cil.scannable.network;
 
 import mcp.MethodsReturnNonnullByDefault;
 

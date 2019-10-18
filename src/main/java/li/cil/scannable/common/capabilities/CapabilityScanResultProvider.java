@@ -3,10 +3,10 @@ package li.cil.scannable.common.capabilities;
 import li.cil.scannable.api.scanning.ScanResult;
 import li.cil.scannable.api.scanning.ScanResultProvider;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTBase;
-import net.minecraft.util.EnumFacing;
+import net.minecraft.nbt.INBT;
+import net.minecraft.util.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityInject;
@@ -32,12 +32,12 @@ public final class CapabilityScanResultProvider {
         INSTANCE;
 
         @Override
-        public int getEnergyCost(final EntityPlayer player, final ItemStack module) {
+        public int getEnergyCost(final PlayerEntity player, final ItemStack module) {
             return 0;
         }
 
         @Override
-        public void initialize(final EntityPlayer player, Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
+        public void initialize(final PlayerEntity player, Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
         }
 
         @Override
@@ -63,12 +63,12 @@ public final class CapabilityScanResultProvider {
 
         @Nullable
         @Override
-        public NBTBase writeNBT(final Capability<ScanResultProvider> capability, final ScanResultProvider instance, final EnumFacing side) {
+        public INBT writeNBT(final Capability<ScanResultProvider> capability, final ScanResultProvider instance, final Direction side) {
             return null;
         }
 
         @Override
-        public void readNBT(final Capability<ScanResultProvider> capability, final ScanResultProvider instance, final EnumFacing side, final NBTBase nbt) {
+        public void readNBT(final Capability<ScanResultProvider> capability, final ScanResultProvider instance, final Direction side, final INBT nbt) {
         }
     }
 }

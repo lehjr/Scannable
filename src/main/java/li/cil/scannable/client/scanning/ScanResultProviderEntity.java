@@ -1,39 +1,34 @@
 package li.cil.scannable.client.scanning;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import li.cil.scannable.api.Icons;
 import li.cil.scannable.api.prefab.AbstractScanResultProvider;
 import li.cil.scannable.api.scanning.ScanResult;
-import li.cil.scannable.common.config.Settings;
+import li.cil.scannable.common.config.CommonConfig;
 import li.cil.scannable.common.init.Items;
 import li.cil.scannable.common.item.ItemScannerModuleEntity;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityList;
-import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.boss.EntityDragon;
-import net.minecraft.entity.monster.EntityGhast;
-import net.minecraft.entity.monster.EntityGolem;
-import net.minecraft.entity.monster.EntityMob;
-import net.minecraft.entity.monster.EntitySlime;
-import net.minecraft.entity.passive.EntityAnimal;
-import net.minecraft.entity.passive.EntityBat;
-import net.minecraft.entity.passive.EntitySquid;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.MobEntity;
+import net.minecraft.entity.boss.dragon.EnderDragonEntity;
+import net.minecraft.entity.monster.GhastEntity;
+import net.minecraft.entity.monster.SlimeEntity;
+import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.BatEntity;
+import net.minecraft.entity.passive.GolemEntity;
+import net.minecraft.entity.passive.SquidEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.registries.ForgeRegistries;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 
 public final class ScanResultProviderEntity extends AbstractScanResultProvider {
@@ -48,7 +43,7 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
     private int minX, maxX, minZ, maxZ;
     private int chunksPerTick;
     private int x, z;
-    private final List<EntityLivingBase> entities = new ArrayList<>();
+    private final List<LivingEntity> entities = new ArrayList<>();
 
     // --------------------------------------------------------------------- //
 
@@ -59,23 +54,23 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
     // ScanResultProvider
 
     @Override
-    public int getEnergyCost(final EntityPlayer player, final ItemStack module) {
+    public int getEnergyCost(final PlayerEntity player, final ItemStack module) {
         if (Items.isModuleAnimal(module)) {
-            return Settings.getEnergyCostModuleAnimal();
+            return CommonConfig.energyCostModuleAnimal.get();
         }
         if (Items.isModuleMonster(module)) {
-            return Settings.getEnergyCostModuleMonster();
+            return CommonConfig.energyCostModuleMonster.get();
         }
         if (Items.isModuleEntity(module)) {
-            return Settings.getEnergyCostModuleEntity();
+            return CommonConfig.energyCostModuleEntity.get();
         }
 
         throw new IllegalArgumentException(String.format("Module not supported by this provider: %s", module));
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
-    public void initialize(final EntityPlayer player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
+    public void initialize(final PlayerEntity player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
         super.initialize(player, modules, center, radius, scanTicks);
 
         scanAnimal = false;
@@ -92,10 +87,13 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
         bounds = new AxisAlignedBB(center.x - radius, center.y - radius, center.z - radius,
                                    center.x + radius, center.y + radius, center.z + radius);
 
-        minX = MathHelper.floor((bounds.minX - World.MAX_ENTITY_RADIUS) / 16f);
-        maxX = MathHelper.ceil((bounds.maxX + World.MAX_ENTITY_RADIUS) / 16f);
-        minZ = MathHelper.floor((bounds.minZ - World.MAX_ENTITY_RADIUS) / 16f);
-        maxZ = MathHelper.ceil((bounds.maxZ + World.MAX_ENTITY_RADIUS) / 16f);
+
+        double maxRadius =  player.world.getMaxEntityRadius();
+
+        minX = MathHelper.floor((bounds.minX - maxRadius) / 16f);
+        maxX = MathHelper.ceil((bounds.maxX + maxRadius) / 16f);
+        minZ = MathHelper.floor((bounds.minZ - maxRadius) / 16f);
+        maxZ = MathHelper.ceil((bounds.maxZ + maxRadius) / 16f);
         x = minX - 1; // -1 for initial moveNext.
         z = minZ;
 
@@ -103,7 +101,7 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
         chunksPerTick = MathHelper.ceil(count / (float) scanTicks);
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
     public void computeScanResults(final Consumer<ScanResult> callback) {
         final World world = player.getEntityWorld();
@@ -112,9 +110,9 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
                 return;
             }
 
-            world.getChunk(x, z).getEntitiesOfTypeWithinAABB(EntityLiving.class, bounds, entities, this::FilterEntities);
-            for (final EntityLivingBase entity : entities) {
-                if (entity.isDead) {
+            world.getChunk(x, z).getEntitiesOfTypeWithinAABB(LivingEntity.class, bounds, entities, this::FilterEntities);
+            for (final LivingEntity entity : entities) {
+                if (!entity.isAlive()) {
                     continue;
                 }
 
@@ -127,11 +125,11 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
         }
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
     public void render(final Entity entity, final List<ScanResult> results, final float partialTicks) {
         GlStateManager.disableLighting();
-        GlStateManager.disableDepth();
+        GlStateManager.disableDepthTest();
         GlStateManager.enableBlend();
 
         final double posX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
@@ -141,7 +139,7 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
         final float pitch = entity.prevRotationPitch + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
 
         final Vec3d lookVec = entity.getLook(partialTicks).normalize();
-        final Vec3d viewerEyes = entity.getPositionEyes(partialTicks);
+        final Vec3d viewerEyes = entity.getEyePosition(partialTicks);
 
         final boolean showDistance = entity.isSneaking();
 
@@ -149,26 +147,26 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
         // vector) so that labels we're looking at are in front of others.
         results.sort(Comparator.comparing(result -> {
             final ScanResultEntity resultEntity = (ScanResultEntity) result;
-            final Vec3d entityEyes = resultEntity.entity.getPositionEyes(partialTicks);
+            final Vec3d entityEyes = resultEntity.entity.getEyePosition(partialTicks);
             final Vec3d toResult = entityEyes.subtract(viewerEyes);
             return lookVec.dotProduct(toResult.normalize());
         }));
 
         for (final ScanResult result : results) {
             final ScanResultEntity resultEntity = (ScanResultEntity) result;
-            final String name = resultEntity.entity.getName();
+            final String name = resultEntity.entity.getName().getFormattedText();
             final ResourceLocation icon = isMonster(resultEntity.entity) ? Icons.WARNING : Icons.INFO;
-            final Vec3d resultPos = resultEntity.entity.getPositionEyes(partialTicks);
+            final Vec3d resultPos = resultEntity.entity.getEyePosition(partialTicks);
             final float distance = showDistance ? (float) resultPos.subtract(viewerEyes).length() : 0f;
             renderIconLabel(posX, posY, posZ, yaw, pitch, lookVec, viewerEyes, distance, resultPos, icon, name);
         }
 
         GlStateManager.disableBlend();
-        GlStateManager.enableDepth();
+        GlStateManager.enableDepthTest();
         GlStateManager.enableLighting();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
     public void reset() {
         super.reset();
@@ -182,7 +180,7 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
 
     // --------------------------------------------------------------------- //
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     private boolean moveNext() {
         x++;
         if (x > maxX) {
@@ -197,7 +195,7 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
     }
 
     private <T extends Entity> boolean FilterEntities(final T entity) {
-        if (scanEntity != null && Objects.equals(scanEntity, EntityList.getEntityString(entity))) {
+        if (scanEntity != null && Objects.equals(new ResourceLocation(scanEntity), ForgeRegistries.ENTITIES.getKey(entity.getType()))) {
             return true;
         }
 
@@ -213,32 +211,32 @@ public final class ScanResultProviderEntity extends AbstractScanResultProvider {
     }
 
     private static boolean isAnimal(final Entity entity) {
-        if (entity instanceof EntityAnimal) {
+        if (entity instanceof AnimalEntity) {
             return true;
         }
-        if (entity instanceof EntityBat) {
+        if (entity instanceof BatEntity) {
             return true;
         }
-        if (entity instanceof EntitySquid) {
+        if (entity instanceof SquidEntity) {
             return true;
         }
         return false;
     }
 
     private static boolean isMonster(final Entity entity) {
-        if (entity instanceof EntityMob) {
+        if (entity instanceof MobEntity) {
             return true;
         }
-        if (entity instanceof EntitySlime) {
+        if (entity instanceof SlimeEntity) {
             return true;
         }
-        if (entity instanceof EntityGhast) {
+        if (entity instanceof GhastEntity) {
             return true;
         }
-        if (entity instanceof EntityDragon) {
+        if (entity instanceof EnderDragonEntity) {
             return true;
         }
-        if (entity instanceof EntityGolem) {
+        if (entity instanceof GolemEntity) {
             return true;
         }
         return false;

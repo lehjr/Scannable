@@ -4,7 +4,7 @@ import li.cil.scannable.common.capabilities.CapabilityScanResultProvider;
 import li.cil.scannable.common.config.Constants;
 import li.cil.scannable.common.item.AbstractItemScannerModule;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.CompoundNBT;
 import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
@@ -25,9 +25,9 @@ public final class ItemHandlerScanner extends ItemStackHandler {
     }
 
     public void updateFromNBT() {
-        final NBTTagCompound nbt = container.getTagCompound();
-        if (nbt != null && nbt.hasKey(TAG_ITEMS, NBT.TAG_COMPOUND)) {
-            deserializeNBT((NBTTagCompound) nbt.getTag(TAG_ITEMS));
+        final CompoundNBT nbt = container.getTag();
+        if (nbt != null && nbt.contains(TAG_ITEMS, NBT.TAG_COMPOUND)) {
+            deserializeNBT((CompoundNBT) nbt.get(TAG_ITEMS));
             if (stacks.size() != Constants.SCANNER_TOTAL_MODULE_COUNT) {
                 final List<ItemStack> oldStacks = new ArrayList<>(stacks);
                 setSize(Constants.SCANNER_TOTAL_MODULE_COUNT);
@@ -58,7 +58,7 @@ public final class ItemHandlerScanner extends ItemStackHandler {
         if (stack.getItem() instanceof AbstractItemScannerModule) {
             return 64;
         }
-        if (stack.hasCapability(CapabilityScanResultProvider.SCAN_RESULT_PROVIDER_CAPABILITY, null)) {
+        if (stack.getCapability(CapabilityScanResultProvider.SCAN_RESULT_PROVIDER_CAPABILITY, null).isPresent()) {
             return 64;
         }
         return 0;

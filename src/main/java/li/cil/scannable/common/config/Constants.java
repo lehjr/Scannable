@@ -10,6 +10,8 @@ public final class Constants {
     public static final String PROXY_CLIENT = "li.cil.scannable.client.ProxyClient";
     public static final String PROXY_SERVER = "li.cil.scannable.server.ProxyServer";
 
+    public static final String SCANNER_CONTAINER_TYPE__REG_NAME = API.MOD_ID + ":scanner_container_type";
+
     // --------------------------------------------------------------------- //
     // Block, item, entity and container names
 

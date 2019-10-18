@@ -1,17 +1,17 @@
 package li.cil.scannable.client.scanning;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import li.cil.scannable.api.Icons;
 import li.cil.scannable.api.prefab.AbstractScanResultProvider;
 import li.cil.scannable.api.scanning.ScanResult;
+import li.cil.scannable.common.config.CommonConfig;
 import li.cil.scannable.common.config.Constants;
-import li.cil.scannable.common.config.Settings;
 import li.cil.scannable.common.item.ItemScannerModuleStructure;
-import li.cil.scannable.common.network.Network;
-import li.cil.scannable.common.network.message.MessageStructureRequest;
+import li.cil.scannable.network.Network;
+import li.cil.scannable.network.packets.StructureRequestPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -61,12 +61,12 @@ public final class ScanResultProviderStructure extends AbstractScanResultProvide
     // ScanResultProvider
 
     @Override
-    public int getEnergyCost(final EntityPlayer player, final ItemStack module) {
-        return Settings.getEnergyCostModuleStructure();
+    public int getEnergyCost(final PlayerEntity player, final ItemStack module) {
+        return CommonConfig.energyCostModuleStructure.get();
     }
 
     @Override
-    public void initialize(final EntityPlayer player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
+    public void initialize(final PlayerEntity player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
         super.initialize(player, modules, center, radius * Constants.MODULE_STRUCTURE_RADIUS_MULTIPLIER, scanTicks);
         hideExplored = false;
         for (final ItemStack module : modules) {
@@ -85,14 +85,14 @@ public final class ScanResultProviderStructure extends AbstractScanResultProvide
                     return;
                 }
 
-                Network.INSTANCE.getWrapper().sendToServer(new MessageStructureRequest(player.getEntityWorld(), new BlockPos(center), radius, hideExplored));
+                Network.CHANNEL_INSTANCE.sendToServer(new StructureRequestPacket(new BlockPos(center), radius, hideExplored));
 
                 state = State.WAIT_RESPONSE;
 
                 break;
             }
             case WAIT_RESULT: {
-                final float renderDistance = Minecraft.getMinecraft().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE;
+                final float renderDistance = Minecraft.getInstance().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE;
                 final float sqRenderDistance = renderDistance * renderDistance;
                 for (final StructureLocation structure : structures) {
                     final Vec3d structureCenter = new Vec3d(structure.pos);
@@ -116,7 +116,7 @@ public final class ScanResultProviderStructure extends AbstractScanResultProvide
     @Override
     public void render(final Entity entity, final List<ScanResult> results, final float partialTicks) {
         GlStateManager.disableLighting();
-        GlStateManager.disableDepth();
+        GlStateManager.disableDepthTest();
         GlStateManager.enableBlend();
 
         final double posX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
@@ -126,11 +126,11 @@ public final class ScanResultProviderStructure extends AbstractScanResultProvide
         final float pitch = entity.prevRotationPitch + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
 
         final Vec3d lookVec = entity.getLook(partialTicks).normalize();
-        final Vec3d viewerEyes = entity.getPositionEyes(partialTicks);
+        final Vec3d viewerEyes = entity.getEyePosition(partialTicks);
 
         final boolean showDistance = entity.isSneaking();
 
-        final float renderDistance = Minecraft.getMinecraft().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE;
+        final float renderDistance = Minecraft.getInstance().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE;
         final float sqRenderDistance = renderDistance * renderDistance;
 
         for (final ScanResult result : results) {
@@ -152,7 +152,7 @@ public final class ScanResultProviderStructure extends AbstractScanResultProvide
         }
 
         GlStateManager.disableBlend();
-        GlStateManager.enableDepth();
+        GlStateManager.enableDepthTest();
         GlStateManager.enableLighting();
     }
 

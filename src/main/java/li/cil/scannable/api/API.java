@@ -1,6 +1,6 @@
 package li.cil.scannable.api;
 
-import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.item.ItemGroup;
 
 /**
  * Glue / actual references for the Scannable API.
@@ -19,7 +19,7 @@ public final class API {
     // --------------------------------------------------------------------- //
 
     // The creative tab holding all the good stuff.
-    public static CreativeTabs creativeTab;
+    public static ItemGroup creativeTab;
 
     // --------------------------------------------------------------------- //
 

@@ -1,11 +1,11 @@
 package li.cil.scannable.api.scanning;
 
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.Vec3d;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -26,7 +26,7 @@ import java.util.function.Consumer;
  * call.
  * <p>
  * Otherwise, the implementation should prepare for spread out collection of
- * results in {@link #initialize(EntityPlayer, Collection, Vec3d, float, int)},
+ * results in {@link #initialize(PlayerEntity, Collection, Vec3d, float, int)},
  * over the specified number of ticks. Each tick until the scan is complete,
  * {@link #computeScanResults(Consumer)} will be called, in which the
  * implementation should add results collected this tick to the passed
@@ -54,7 +54,7 @@ public interface ScanResultProvider {
      * @param module the module to get the energy cost for.
      * @return the energy cost contributed by this provider.
      */
-    int getEnergyCost(final EntityPlayer player, final ItemStack module);
+    int getEnergyCost(final PlayerEntity player, final ItemStack module);
 
     /**
      * Called each time a scan is started by the player.
@@ -70,8 +70,8 @@ public interface ScanResultProvider {
      * @param radius    the maximum radius of the scanned sphere.
      * @param scanTicks the total number of ticks the scan will take.
      */
-    @SideOnly(Side.CLIENT)
-    void initialize(final EntityPlayer player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks);
+    @OnlyIn(Dist.CLIENT)
+    void initialize(final PlayerEntity player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks);
 
     /**
      * Called each tick during an ongoing scan. Add any results collected this
@@ -80,7 +80,7 @@ public interface ScanResultProvider {
      *
      * @param callback the callback to feed results to.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     void computeScanResults(final Consumer<ScanResult> callback);
 
     /**
@@ -94,7 +94,7 @@ public interface ScanResultProvider {
      * @param result the result to filter.
      * @return <code>true</code> if the result should be kept; <code>false</code> otherwise.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     boolean isValid(final ScanResult result);
 
     /**
@@ -112,7 +112,7 @@ public interface ScanResultProvider {
      * @param results      the results to render.
      * @param partialTicks partial ticks of the currently rendered frame.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     void render(final Entity entity, final List<ScanResult> results, final float partialTicks);
 
     /**
@@ -122,6 +122,6 @@ public interface ScanResultProvider {
      * called after the scan is no longer being rendered, so this can be used
      * to clean up rendering data as well.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     void reset();
 }

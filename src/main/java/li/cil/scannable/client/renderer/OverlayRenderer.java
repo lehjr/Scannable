@@ -1,21 +1,21 @@
 package li.cil.scannable.client.renderer;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import li.cil.scannable.api.API;
 import li.cil.scannable.common.config.Constants;
 import li.cil.scannable.common.init.Items;
+import net.minecraft.client.MainWindow;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 
 public enum OverlayRenderer {
@@ -29,8 +29,8 @@ public enum OverlayRenderer {
             return;
         }
 
-        final Minecraft mc = Minecraft.getMinecraft();
-        final EntityPlayer player = mc.player;
+        final Minecraft mc = Minecraft.getInstance();
+        final PlayerEntity player = mc.player;
 
         final ItemStack stack = player.getActiveItemStack();
         if (stack.isEmpty()) {
@@ -41,17 +41,17 @@ public enum OverlayRenderer {
             return;
         }
 
-        final int total = stack.getMaxItemUseDuration();
+        final int total = stack.getUseDuration();
         final int remaining = player.getItemInUseCount();
 
         final float progress = MathHelper.clamp(1 - (remaining - event.getPartialTicks()) / (float) total, 0, 1);
 
-        final ScaledResolution resolution = event.getResolution();
+        final MainWindow resolution = event.getWindow();
         final int screenWidth = resolution.getScaledWidth();
         final int screenHeight = resolution.getScaledHeight();
 
         GlStateManager.enableBlend();
-        GlStateManager.color(0.66f, 0.8f, 0.93f, 0.66f);
+        GlStateManager.color4f(0.66f, 0.8f, 0.93f, 0.66f);
         mc.getTextureManager().bindTexture(PROGRESS);
 
         final Tessellator tessellator = Tessellator.getInstance();
@@ -129,7 +129,7 @@ public enum OverlayRenderer {
 
         tessellator.draw();
 
-        mc.fontRenderer.drawString(I18n.format(Constants.GUI_SCANNER_PROGRESS, MathHelper.floor(progress * 100)), right + 12, midY - mc.fontRenderer.FONT_HEIGHT / 2, 0xCCAACCEE, true);
+        mc.fontRenderer.drawStringWithShadow(I18n.format(Constants.GUI_SCANNER_PROGRESS, MathHelper.floor(progress * 100)), right + 12, midY - mc.fontRenderer.FONT_HEIGHT / 2, 0xCCAACCEE);
 
         GlStateManager.bindTexture(0);
     }

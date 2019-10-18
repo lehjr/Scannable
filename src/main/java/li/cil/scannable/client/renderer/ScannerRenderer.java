@@ -1,49 +1,57 @@
 package li.cil.scannable.client.renderer;
 
+import com.mojang.blaze3d.platform.GLX;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.TextureUtil;
 import li.cil.scannable.api.API;
 import li.cil.scannable.client.ScanManager;
 import li.cil.scannable.common.Scannable;
-import li.cil.scannable.common.config.Settings;
+import li.cil.scannable.common.config.ClientConfig;
 import li.cil.scannable.integration.optifine.ProxyOptiFine;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.resources.IReloadableResourceManager;
-import net.minecraft.client.resources.IResource;
-import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
+import net.minecraft.resources.IReloadableResourceManager;
+import net.minecraft.resources.IResource;
+import net.minecraft.resources.IResourceManager;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.resource.IResourceType;
+import net.minecraftforge.resource.ISelectiveResourceReloadListener;
 import org.apache.commons.io.IOUtils;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
-import org.lwjgl.util.vector.Matrix4f;
-import org.lwjgl.util.vector.Vector3f;
-import org.lwjgl.util.vector.Vector4f;
 
+import javax.annotation.Nullable;
+import javax.vecmath.Matrix4f;
+import javax.vecmath.Vector3f;
+import javax.vecmath.Vector4f;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.function.Predicate;
 
-@SideOnly(Side.CLIENT)
+@OnlyIn(Dist.CLIENT)
 public enum ScannerRenderer {
     INSTANCE;
+
+    final boolean isStencilEnabled = false; // Fixme: experimental
+    ShaderReloader shaderReloader = new ShaderReloader();
+
 
     // --------------------------------------------------------------------- //
     // Settings
@@ -102,49 +110,80 @@ public enum ScannerRenderer {
      * Initialize or re-initialize the shader used for the scanning effect.
      */
     public void init() {
-        final IResourceManager resourceManager = Minecraft.getMinecraft().getResourceManager();
-        reloadShaders(resourceManager);
+        final IResourceManager resourceManager = Minecraft.getInstance().getResourceManager();
+        shaderReloader.onResourceManagerReload(resourceManager);
         if (resourceManager instanceof IReloadableResourceManager) {
-            ((IReloadableResourceManager) resourceManager).registerReloadListener(this::reloadShaders);
+            ((IReloadableResourceManager) resourceManager).addReloadListener(shaderReloader);
         }
     }
 
-    private void reloadShaders(final IResourceManager resourceManager) {
-        try {
-            deleteShader();
-            vertexShader = loadShader(resourceManager, GL20.GL_VERTEX_SHADER, SCANNER_VERTEX_SHADER_LOCATION);
-            fragmentShader = loadShader(resourceManager, GL20.GL_FRAGMENT_SHADER, SCANNER_FRAGMENT_SHADER_LOCATION);
-            shaderProgram = linkProgram(vertexShader, fragmentShader);
-            camPosUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "camPos");
-            centerUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "center");
-            radiusUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "radius");
-            zNearUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "zNear");
-            zFarUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "zFar");
-            aspectUniform = OpenGlHelper.glGetUniformLocation(shaderProgram, "aspect");
+    class ShaderReloader implements ISelectiveResourceReloadListener {
 
-            copyVertexShader = loadShader(resourceManager, GL20.GL_VERTEX_SHADER, COPY_VERTEX_SHADER_LOCATION);
-            copyFragmentShader = loadShader(resourceManager, GL20.GL_FRAGMENT_SHADER, COPY_FRAGMENT_SHADER_LOCATION);
-            copyShaderProgram = linkProgram(copyVertexShader, copyFragmentShader);
-        } catch (final Exception e) {
-            deleteShader();
-            Scannable.getLog().error("Failed loading shader.", e);
+        @Nullable
+        @Override
+        public IResourceType getResourceType() {
+            System.out.println("checking resource type");
+
+            return ShaderResourceType.CUSTOM_SHADERS;
         }
+
+        @Override
+        public void onResourceManagerReload(IResourceManager resourceManager) {
+            System.out.println("loading/reloading shaders");
+            try {
+                deleteShader();
+                vertexShader = loadShader(resourceManager, GLX.GL_VERTEX_SHADER, SCANNER_VERTEX_SHADER_LOCATION);
+                fragmentShader = loadShader(resourceManager, GLX.GL_FRAGMENT_SHADER, SCANNER_FRAGMENT_SHADER_LOCATION);
+                shaderProgram = linkProgram(vertexShader, fragmentShader);
+                camPosUniform = GLX.glGetUniformLocation(shaderProgram, "camPos");
+                centerUniform = GLX.glGetUniformLocation(shaderProgram, "center");
+                radiusUniform = GLX.glGetUniformLocation(shaderProgram, "radius");
+                zNearUniform = GLX.glGetUniformLocation(shaderProgram, "zNear");
+                zFarUniform = GLX.glGetUniformLocation(shaderProgram, "zFar");
+                aspectUniform = GLX.glGetUniformLocation(shaderProgram, "aspect");
+
+                copyVertexShader = loadShader(resourceManager, GLX.GL_VERTEX_SHADER, COPY_VERTEX_SHADER_LOCATION);
+                copyFragmentShader = loadShader(resourceManager, GLX.GL_FRAGMENT_SHADER, COPY_FRAGMENT_SHADER_LOCATION);
+                copyShaderProgram = linkProgram(copyVertexShader, copyFragmentShader);
+            } catch (final Exception e) {
+                deleteShader();
+                Scannable.getLog().error("Failed loading shader.", e);
+            }
+        }
+
+        @Override
+        public void onResourceManagerReload(IResourceManager resourceManager, Predicate<IResourceType> resourcePredicate) {
+            System.out.println("reloading and type is ours? ");
+
+            if (resourcePredicate.test(getResourceType())) {
+                System.out.print("true");
+
+
+                onResourceManagerReload(resourceManager);
+            } else {
+                System.out.print("false");
+            }
+        }
+    }
+
+    public enum ShaderResourceType implements IResourceType {
+        CUSTOM_SHADERS;
     }
 
     public void ping(final Vec3d pos) {
         if (shaderProgram == 0) {
             return;
         }
-
-        if (!OpenGlHelper.isFramebufferEnabled()) {
+        // framebuffer always enabled now
+        if (!GLX.isUsingFBOs()) {
             return;
         }
 
         currentStart = System.currentTimeMillis();
 
-        OpenGlHelper.glUseProgram(shaderProgram);
+        GLX.glUseProgram(shaderProgram);
 
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
         final Framebuffer framebuffer = mc.getFramebuffer();
 
         setUniform(aspectUniform, framebuffer.framebufferTextureWidth / (float) framebuffer.framebufferTextureHeight);
@@ -152,7 +191,7 @@ public enum ScannerRenderer {
         setUniform(zFarUniform, mc.gameSettings.renderDistanceChunks * 16);
         setUniform(centerUniform, pos);
 
-        OpenGlHelper.glUseProgram(0);
+        GLX.glUseProgram(0);
     }
 
     // A note on the rendering: usually we just render when the world renders, as a simple additive overlay after
@@ -197,7 +236,7 @@ public enum ScannerRenderer {
                 GlStateManager.matrixMode(GL11.GL_MODELVIEW);
                 GlStateManager.pushMatrix();
 
-                Minecraft.getMinecraft().entityRenderer.setupCameraTransform(event.getPartialTicks(), 2);
+                Minecraft.getInstance().gameRenderer.setupCameraTransform(event.getPartialTicks());
                 render(event.getPartialTicks());
 
                 GlStateManager.matrixMode(GL11.GL_PROJECTION);
@@ -217,11 +256,11 @@ public enum ScannerRenderer {
             return;
         }
 
-        if (!OpenGlHelper.isFramebufferEnabled()) {
+        if (!GLX.isUsingFBOs()) {
             return;
         }
 
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
 
         final World world = mc.world;
         if (world == null) {
@@ -231,7 +270,7 @@ public enum ScannerRenderer {
         if (ProxyOptiFine.INSTANCE.isShaderPackLoaded()) {
             mode = Mode.OPTIFINE;
         } else if (mode == Mode.OPTIFINE || mode == null) {
-            mode = Settings.injectDepthTexture ? Mode.INJECT : Mode.RENDER;
+            mode = ClientConfig.injectDepthTexture.get() ? Mode.INJECT : Mode.RENDER;
         }
 
         final Framebuffer framebuffer = mc.getFramebuffer();
@@ -253,21 +292,21 @@ public enum ScannerRenderer {
     }
 
     private void copyDepthTexture() {
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
 
         final Framebuffer framebuffer = mc.getFramebuffer();
 
-        final int oldFramebuffer = GlStateManager.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        final int oldFramebuffer = GlStateManager.getInteger(GL30.GL_FRAMEBUFFER_BINDING);
 
-        OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, copyFramebufferObject);
+        GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, copyFramebufferObject);
 
         final int width = framebuffer.framebufferTextureWidth;
         final int height = framebuffer.framebufferTextureHeight;
 
         GlStateManager.bindTexture(framebufferDepthTexture);
 
-        final int oldProgram = GlStateManager.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        OpenGlHelper.glUseProgram(copyShaderProgram);
+        final int oldProgram = GlStateManager.getInteger(GL20.GL_CURRENT_PROGRAM);
+        GLX.glUseProgram(copyShaderProgram);
 
         setupMatrices(width, height);
 
@@ -285,15 +324,15 @@ public enum ScannerRenderer {
 
         restoreMatrices();
 
-        OpenGlHelper.glUseProgram(oldProgram);
+        GLX.glUseProgram(oldProgram);
 
         GlStateManager.bindTexture(0);
 
-        OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, oldFramebuffer);
+        GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, oldFramebuffer);
     }
 
     private void render(final float partialTicks) {
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
 
         final World world = mc.world;
         if (world == null) {
@@ -309,26 +348,25 @@ public enum ScannerRenderer {
         final int adjustedDuration = ScanManager.computeScanGrowthDuration();
 
         if (mode == Mode.RENDER) {
-            final int oldFramebuffer = GlStateManager.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+            final int oldFramebuffer = GlStateManager.getInteger(GL30.GL_FRAMEBUFFER_BINDING);
 
-            OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
+            GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
 
-            GlStateManager.clear(GL11.GL_DEPTH_BUFFER_BIT);
-            GlStateManager.disableTexture2D();
+            GlStateManager.clearDepth(GL11.GL_DEPTH_BUFFER_BIT);
+            GlStateManager.disableTexture();
 
-            mc.renderGlobal.renderBlockLayer(BlockRenderLayer.SOLID, partialTicks, 0, viewer);
-            mc.renderGlobal.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED, partialTicks, 0, viewer);
+            mc.worldRenderer.renderBlockLayer(BlockRenderLayer.SOLID, mc.gameRenderer.getActiveRenderInfo());
+            mc.worldRenderer.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED, mc.gameRenderer.getActiveRenderInfo());
 
-            GlStateManager.enableTexture2D();
+            GlStateManager.enableTexture();
 
-            OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, oldFramebuffer);
+            GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, oldFramebuffer);
         }
 
         setupCorners();
 
         GlStateManager.pushMatrix();
-        GlStateManager.pushAttrib();
-
+        GlStateManager.pushLightingAttributes();
         GlStateManager.depthMask(false);
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
@@ -346,21 +384,21 @@ public enum ScannerRenderer {
                 // Activate original depth render buffer while we use the depth texture.
                 // Even though it's not written to typically drivers won't like reading
                 // from a sampler of a texture that's part of the current render target.
-                if (framebuffer.isStencilEnabled()) {
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_STENCIL_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                if (this.isStencilEnabled /*framebuffer.isStencilEnabled()*/) {
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GL30.GL_STENCIL_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
                 } else {
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_DEPTH_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GLX.GL_DEPTH_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
                 }
             }
 
             GlStateManager.bindTexture(framebufferDepthTexture);
         }
 
-        final int oldProgram = GlStateManager.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        OpenGlHelper.glUseProgram(shaderProgram);
+        final int oldProgram = GlStateManager.getInteger(GL20.GL_CURRENT_PROGRAM);
+        GLX.glUseProgram(shaderProgram);
 
-        setUniform(camPosUniform, viewer.getPositionEyes(partialTicks));
+        setUniform(camPosUniform, viewer.getEyePosition(partialTicks));
         setUniform(radiusUniform, radius);
 
         setupMatrices(width, height);
@@ -371,25 +409,25 @@ public enum ScannerRenderer {
         // Use the normal to pass along the ray direction for each corner.
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_NORMAL);
 
-        buffer.pos(0, height, 0).tex(0, 0).normal(bottomLeft.x, bottomLeft.y, bottomLeft.z).endVertex();
-        buffer.pos(width, height, 0).tex(1, 0).normal(bottomRight.x, bottomRight.y, bottomRight.z).endVertex();
-        buffer.pos(width, 0, 0).tex(1, 1).normal(topRight.x, topRight.y, topRight.z).endVertex();
-        buffer.pos(0, 0, 0).tex(0, 1).normal(topLeft.x, topLeft.y, topLeft.z).endVertex();
+        buffer.pos(0, height, 0).tex(0, 0).normal(bottomLeft.getX(), bottomLeft.getY(), bottomLeft.getZ()).endVertex();
+        buffer.pos(width, height, 0).tex(1, 0).normal(bottomRight.getX(), bottomRight.getY(), bottomRight.getZ()).endVertex();
+        buffer.pos(width, 0, 0).tex(1, 1).normal(topRight.getX(), topRight.getY(), topRight.getZ()).endVertex();
+        buffer.pos(0, 0, 0).tex(0, 1).normal(topLeft.getX(), topLeft.getY(), topLeft.getZ()).endVertex();
 
         tessellator.draw();
 
         restoreMatrices();
 
-        OpenGlHelper.glUseProgram(oldProgram);
+        GLX.glUseProgram(oldProgram);
 
         GlStateManager.bindTexture(0);
 
         if (mode == Mode.INJECT && copyFramebufferDepthTexture == 0) {
             // Swap back in our depth texture for that sweet, sweet depth info.
-            if (framebuffer.isStencilEnabled()) {
-                OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
+            if (this.isStencilEnabled /*framebuffer.isStencilEnabled()*/) {
+                GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
             } else {
-                OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
+                GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GLX.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
             }
         }
 
@@ -397,128 +435,152 @@ public enum ScannerRenderer {
         GlStateManager.disableBlend();
         GlStateManager.depthMask(true);
 
-        GlStateManager.popAttrib();
+        GlStateManager.popAttributes();;
         GlStateManager.popMatrix();
     }
 
     // --------------------------------------------------------------------- //
 
     private static int loadShader(final IResourceManager resourceManager, final int type, final ResourceLocation location) throws Exception {
-        final int shader = OpenGlHelper.glCreateShader(type);
+        final int shader = GLX.glCreateShader(type);
         compileShader(resourceManager, shader, location);
         return shader;
     }
 
+//
+//    public static ShaderLoader func_216534_a(ShaderLoader.ShaderType p_216534_0_, String p_216534_1_, InputStream p_216534_2_) throws IOException {
+//        String s = TextureUtil.readResourceAsString(p_216534_2_);
+//        if (s == null) {
+//            throw new IOException("Could not load program " + p_216534_0_.getShaderName());
+//        } else {
+//            int i = GLX.glCreateShader(p_216534_0_.getShaderMode());
+//            GLX.glShaderSource(i, s);
+//            GLX.glCompileShader(i);
+//            if (GLX.glGetShaderi(i, GLX.GL_COMPILE_STATUS) == 0) {
+//                String s1 = StringUtils.trim(GLX.glGetShaderInfoLog(i, 32768));
+//                throw new IOException("Couldn't compile " + p_216534_0_.getShaderName() + " program: " + s1);
+//            } else {
+//                ShaderLoader shaderloader = new ShaderLoader(p_216534_0_, i, p_216534_1_);
+//                p_216534_0_.getLoadedShaders().put(p_216534_1_, shaderloader);
+//                return shaderloader;
+//            }
+//        }
+//    }
+
+
+
     private static void compileShader(final IResourceManager resourceManager, final int shader, final ResourceLocation location) throws Exception {
         final IResource resource = resourceManager.getResource(location);
 
-        try (final InputStream stream = resource.getInputStream()) {
-            final byte[] bytes = IOUtils.toByteArray(stream);
-            final ByteBuffer buffer = BufferUtils.createByteBuffer(bytes.length);
-            buffer.put(bytes);
-            buffer.rewind();
-            OpenGlHelper.glShaderSource(shader, buffer);
+        try {
+            System.out.println("location: " + location);
+
+            final InputStream stream = resource.getInputStream();
+            String s = TextureUtil.readResourceAsString(stream);
+            GLX.glShaderSource(shader, s);
+        } catch (Exception e) {
+            Scannable.getLog().trace(e);
         }
 
-        OpenGlHelper.glCompileShader(shader);
-        if (OpenGlHelper.glGetShaderi(shader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
-            throw new Exception(OpenGlHelper.glGetShaderInfoLog(shader, 4096));
+        GLX.glCompileShader(shader);
+        if (GLX.glGetShaderi(shader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
+            throw new Exception(GLX.glGetShaderInfoLog(shader, 4096));
         }
     }
 
     private static int linkProgram(final int vertexShader, final int fragmentShader) throws Exception {
-        final int program = OpenGlHelper.glCreateProgram();
-        if (vertexShader > 0) OpenGlHelper.glAttachShader(program, vertexShader);
-        OpenGlHelper.glAttachShader(program, fragmentShader);
-        OpenGlHelper.glLinkProgram(program);
-        if (OpenGlHelper.glGetProgrami(program, GL20.GL_LINK_STATUS) == GL11.GL_FALSE) {
-            throw new Exception(OpenGlHelper.glGetProgramInfoLog(program, 4096));
+        final int program = GLX.glCreateProgram();
+        if (vertexShader > 0) GLX.glAttachShader(program, vertexShader);
+        GLX.glAttachShader(program, fragmentShader);
+        GLX.glLinkProgram(program);
+        if (GLX.glGetProgrami(program, GL20.GL_LINK_STATUS) == GL11.GL_FALSE) {
+            throw new Exception(GLX.glGetProgramInfoLog(program, 4096));
         }
         return program;
     }
 
     private void deleteShader() {
         if (shaderProgram != 0) {
-            OpenGlHelper.glDeleteProgram(shaderProgram);
+            GLX.glDeleteProgram(shaderProgram);
             shaderProgram = 0;
         }
         if (vertexShader != 0) {
-            OpenGlHelper.glDeleteShader(vertexShader);
+            GLX.glDeleteShader(vertexShader);
             vertexShader = 0;
         }
         if (fragmentShader != 0) {
-            OpenGlHelper.glDeleteShader(fragmentShader);
+            GLX.glDeleteShader(fragmentShader);
             fragmentShader = 0;
         }
         if (copyShaderProgram != 0) {
-            OpenGlHelper.glDeleteProgram(copyShaderProgram);
+            GLX.glDeleteProgram(copyShaderProgram);
             copyShaderProgram = 0;
         }
         if (copyVertexShader != 0) {
-            OpenGlHelper.glDeleteShader(copyVertexShader);
+            GLX.glDeleteShader(copyVertexShader);
             copyVertexShader = 0;
         }
         if (copyFragmentShader != 0) {
-            OpenGlHelper.glDeleteShader(copyFragmentShader);
+            GLX.glDeleteShader(copyFragmentShader);
             copyFragmentShader = 0;
         }
     }
 
     private void installDepthTexture(final Framebuffer framebuffer) {
-        final int oldFramebuffer = GlStateManager.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        final int oldFramebuffer = GlStateManager.getInteger(GL30.GL_FRAMEBUFFER_BINDING);
 
         switch (mode) {
             case INJECT:
                 framebufferObject = framebuffer.framebufferObject;
-                if (framebuffer.isStencilEnabled()) {
+                if (this.isStencilEnabled /*framebuffer.isStencilEnabled()*/) {
                     framebufferDepthTexture = createTexture(framebuffer.framebufferTextureWidth, framebuffer.framebufferTextureHeight, GL30.GL_DEPTH24_STENCIL8, GL30.GL_DEPTH_STENCIL, GL30.GL_UNSIGNED_INT_24_8);
-                    OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
-                    OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
+                    GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
+                    GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
                 } else {
                     framebufferDepthTexture = createTexture(framebuffer.framebufferTextureWidth, framebuffer.framebufferTextureHeight, GL14.GL_DEPTH_COMPONENT24, GL11.GL_DEPTH_COMPONENT, GL11.GL_UNSIGNED_INT);
-                    OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
-                    OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
+                    GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
+                    GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GLX.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
                 }
                 break;
             case RENDER:
-                framebufferObject = OpenGlHelper.glGenFramebuffers();
+                framebufferObject = GLX.glGenFramebuffers();
                 framebufferDepthTexture = createTexture(framebuffer.framebufferTextureWidth, framebuffer.framebufferTextureHeight, GL14.GL_DEPTH_COMPONENT24, GL11.GL_DEPTH_COMPONENT, GL11.GL_UNSIGNED_INT);
-                OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
-                OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
+                GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
+                GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GLX.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, framebufferDepthTexture, 0);
                 break;
             case OPTIFINE:
                 framebufferDepthTexture = ProxyOptiFine.INSTANCE.getDepthTexture();
 
-                copyFramebufferObject = OpenGlHelper.glGenFramebuffers();
+                copyFramebufferObject = GLX.glGenFramebuffers();
                 copyFramebufferDepthTexture = createTexture(framebuffer.framebufferTextureWidth, framebuffer.framebufferTextureHeight, GL30.GL_R32F, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE);
-                OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, copyFramebufferObject);
-                OpenGlHelper.glFramebufferTexture2D(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, copyFramebufferDepthTexture, 0);
+                GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, copyFramebufferObject);
+                GLX.glFramebufferTexture2D(GLX.GL_FRAMEBUFFER, GLX.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, copyFramebufferDepthTexture, 0);
                 break;
         }
 
-        OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, oldFramebuffer);
+        GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, oldFramebuffer);
     }
 
     private void uninstallDepthTexture(final Framebuffer framebuffer) {
         switch (mode) {
             case INJECT:
-                if (framebuffer.isStencilEnabled()) {
-                    OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, GL30.GL_STENCIL_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                if (this.isStencilEnabled /*framebuffer.isStencilEnabled()*/) {
+                    GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GL30.GL_STENCIL_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
                 } else {
-                    OpenGlHelper.glBindFramebuffer(OpenGlHelper.GL_FRAMEBUFFER, framebufferObject);
-                    OpenGlHelper.glFramebufferRenderbuffer(OpenGlHelper.GL_FRAMEBUFFER, OpenGlHelper.GL_DEPTH_ATTACHMENT, OpenGlHelper.GL_RENDERBUFFER, framebuffer.depthBuffer);
+                    GLX.glBindFramebuffer(GLX.GL_FRAMEBUFFER, framebufferObject);
+                    GLX.glFramebufferRenderbuffer(GLX.GL_FRAMEBUFFER, GLX.GL_DEPTH_ATTACHMENT, GLX.GL_RENDERBUFFER, framebuffer.depthBuffer);
                 }
-                TextureUtil.deleteTexture(framebufferDepthTexture);
+                TextureUtil.releaseTextureId(framebufferDepthTexture);
                 break;
             case RENDER:
-                OpenGlHelper.glDeleteFramebuffers(framebufferObject);
-                TextureUtil.deleteTexture(framebufferDepthTexture);
+                GLX.glDeleteFramebuffers(framebufferObject);
+                TextureUtil.releaseTextureId(framebufferDepthTexture);
                 break;
             case OPTIFINE:
-                OpenGlHelper.glDeleteFramebuffers(copyFramebufferObject);
-                TextureUtil.deleteTexture(copyFramebufferDepthTexture);
+                GLX.glDeleteFramebuffers(copyFramebufferObject);
+                TextureUtil.releaseTextureId(copyFramebufferDepthTexture);
                 break;
         }
 
@@ -529,16 +591,16 @@ public enum ScannerRenderer {
     }
 
     private int createTexture(final int width, final int height, final int internalFormat, final int format, final int type) {
-        final int texture = TextureUtil.glGenTextures();
+        final int texture = TextureUtil.generateTextureId();
         GlStateManager.bindTexture(texture);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL14.GL_DEPTH_TEXTURE_MODE, GL11.GL_LUMINANCE);
-//        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL14.GL_TEXTURE_COMPARE_MODE, GL14.GL_COMPARE_R_TO_TEXTURE);
-        GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL14.GL_TEXTURE_COMPARE_FUNC, GL11.GL_LEQUAL);
-        GlStateManager.glTexImage2D(GL11.GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, null);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL14.GL_DEPTH_TEXTURE_MODE, GL11.GL_LUMINANCE);
+//        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL14.GL_TEXTURE_COMPARE_MODE, GL14.GL_COMPARE_R_TO_TEXTURE);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL14.GL_TEXTURE_COMPARE_FUNC, GL11.GL_LEQUAL);
+        GlStateManager.texImage2D(GL11.GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, null);
         GlStateManager.bindTexture(0);
         return texture;
     }
@@ -546,7 +608,7 @@ public enum ScannerRenderer {
     private void setupCorners() {
         getMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
         getMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
-        Matrix4f.mul(projectionMatrix, modelViewMatrix, mvpMatrix);
+        mvpMatrix.mul(projectionMatrix, modelViewMatrix);
         mvpMatrix.invert();
         setupCorner(CORNER_TOP_LEFT, topLeft);
         setupCorner(CORNER_TOP_RIGHT, topRight);
@@ -555,10 +617,10 @@ public enum ScannerRenderer {
     }
 
     private void setupCorner(final Vector4f corner, final Vector3f into) {
-        Matrix4f.transform(mvpMatrix, corner, tempCorner);
+        mvpMatrix.transform(corner, tempCorner);
         tempCorner.scale(1 / tempCorner.w);
-        into.set(tempCorner);
-        into.normalise();
+        into.set(tempCorner.x, tempCorner.y, tempCorner.z);
+        into.normalize();
     }
 
     private void setupMatrices(final int width, final int height) {
@@ -569,7 +631,7 @@ public enum ScannerRenderer {
         GlStateManager.matrixMode(GL11.GL_MODELVIEW);
         GlStateManager.pushMatrix();
         GlStateManager.loadIdentity();
-        GlStateManager.translate(0, 0, -2000);
+        GlStateManager.translated(0, 0, -2000);
         GlStateManager.viewport(0, 0, width, height);
     }
 
@@ -582,16 +644,33 @@ public enum ScannerRenderer {
 
     private void getMatrix(final int matrix, final Matrix4f into) {
         float16Buffer.position(0);
-        GlStateManager.getFloat(matrix, float16Buffer);
+        GlStateManager.getMatrix(matrix, float16Buffer);
         float16Buffer.position(0);
-        into.load(float16Buffer);
+        // floatbuffer.Array() not working for whatever reason
+        into.set(new Matrix4f(
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get(),
+                float16Buffer.get()));
     }
 
     private void setUniform(final int uniform, final float value) {
         float1Buffer.clear();
         float1Buffer.put(value);
         float1Buffer.rewind();
-        OpenGlHelper.glUniform1(uniform, float1Buffer);
+        GLX.glUniform1(uniform, float1Buffer);
     }
 
     private void setUniform(final int uniform, final Vec3d value) {
@@ -600,7 +679,7 @@ public enum ScannerRenderer {
         float3Buffer.put((float) value.y);
         float3Buffer.put((float) value.z);
         float3Buffer.rewind();
-        OpenGlHelper.glUniform3(uniform, float3Buffer);
+        GLX.glUniform3(uniform, float3Buffer);
     }
 
     private enum Mode {

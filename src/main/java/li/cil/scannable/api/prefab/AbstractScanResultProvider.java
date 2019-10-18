@@ -1,23 +1,23 @@
 package li.cil.scannable.api.prefab;
 
 import com.google.common.base.Strings;
+import com.mojang.blaze3d.platform.GlStateManager;
 import li.cil.scannable.api.scanning.ScanResult;
 import li.cil.scannable.api.scanning.ScanResultProvider;
 import li.cil.scannable.common.config.Constants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import org.lwjgl.opengl.GL11;
 
 import javax.annotation.Nullable;
@@ -28,7 +28,7 @@ import java.util.Collection;
  * functionality for drawing result information.
  */
 public abstract class AbstractScanResultProvider implements ScanResultProvider {
-    protected EntityPlayer player;
+    protected PlayerEntity player;
     protected Vec3d center;
     protected float radius;
 
@@ -36,25 +36,25 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
     // ScanResultProvider
 
     @Override
-    public int getEnergyCost(final EntityPlayer player, final ItemStack module) {
+    public int getEnergyCost(final PlayerEntity player, final ItemStack module) {
         return 50;
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
-    public void initialize(final EntityPlayer player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
+    public void initialize(final PlayerEntity player, final Collection<ItemStack> modules, final Vec3d center, final float radius, final int scanTicks) {
         this.player = player;
         this.center = center;
         this.radius = radius;
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
     public boolean isValid(final ScanResult result) {
         return true;
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
     public void reset() {
         player = null;
@@ -70,7 +70,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
      * @param width  the width of the quad.
      * @param height the height of the quad.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void renderQuad(final float width, final float height) {
         final Tessellator t = Tessellator.getInstance();
         final BufferBuilder buffer = t.getBuffer();
@@ -98,7 +98,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
      * @param icon            the icon to display.
      * @param label           the label text. May be null.
      */
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void renderIconLabel(final double posX, final double posY, final double posZ, final float yaw, final float pitch, final Vec3d lookVec, final Vec3d viewerEyes, final float displayDistance, final Vec3d resultPos, final ResourceLocation icon, @Nullable final String label) {
         final Vec3d toResult = resultPos.subtract(viewerEyes);
         final float distance = (float) toResult.length();
@@ -109,11 +109,11 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         final float scale = distance * focusScale * 0.005f;
 
         GlStateManager.pushMatrix();
-        GlStateManager.translate(resultPos.x, resultPos.y, resultPos.z);
-        GlStateManager.translate(-posX, -posY, -posZ);
-        GlStateManager.rotate(-yaw, 0, 1, 0);
-        GlStateManager.rotate(pitch, 1, 0, 0);
-        GlStateManager.scale(-scale, -scale, scale);
+        GlStateManager.translated(resultPos.x, resultPos.y, resultPos.z);
+        GlStateManager.translated(-posX, -posY, -posZ);
+        GlStateManager.rotatef(-yaw, 0, 1, 0);
+        GlStateManager.rotatef(pitch, 1, 0, 0);
+        GlStateManager.scalef(-scale, -scale, scale);
 
         if (lookDirDot > 0.999f && !Strings.isNullOrEmpty(label)) {
             final String text;
@@ -123,25 +123,25 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
                 text = label;
             }
 
-            final FontRenderer fontRenderer = Minecraft.getMinecraft().fontRenderer;
+            final FontRenderer fontRenderer = Minecraft.getInstance().fontRenderer;
             final int width = fontRenderer.getStringWidth(text) + 16;
 
-            GlStateManager.disableTexture2D();
+            GlStateManager.disableTexture();
             GlStateManager.pushMatrix();
-            GlStateManager.translate(width / 2, 0, 0);
+            GlStateManager.translated(width / 2, 0, 0);
 
-            GlStateManager.color(0, 0, 0, 0.6f);
+            GlStateManager.color4f(0, 0, 0, 0.6f);
             renderQuad(width, fontRenderer.FONT_HEIGHT + 5);
 
             GlStateManager.popMatrix();
-            GlStateManager.enableTexture2D();
+            GlStateManager.enableTexture();
 
-            fontRenderer.drawString(text, 12, -4, 0xFFFFFFFF, true);
+            fontRenderer.drawStringWithShadow(text, 12, -4, 0xFFFFFFFF);
         }
 
-        Minecraft.getMinecraft().getTextureManager().bindTexture(icon);
+        Minecraft.getInstance().getTextureManager().bindTexture(icon);
 
-        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.color4f(1, 1, 1, 1);
         renderQuad(16, 16);
 
         GlStateManager.popMatrix();
@@ -150,7 +150,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
     // --------------------------------------------------------------------- //
     // Drawing simple primitives in an existing buffer.
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawTexturedQuad(final float width, final float height, final BufferBuilder buffer) {
         buffer.pos(-width / 2, height / 2, 0).tex(0, 1).endVertex();
         buffer.pos(width / 2, height / 2, 0).tex(1, 1).endVertex();
@@ -158,7 +158,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(-width / 2, -height / 2, 0).tex(0, 0).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawCube(final double minX, final double minY, final double minZ, final double maxX, final double maxY, final double maxZ, final BufferBuilder buffer) {
         drawPlaneNegX(minX, minY, maxY, minZ, maxZ, buffer);
         drawPlanePosX(maxX, minY, maxY, minZ, maxZ, buffer);
@@ -168,7 +168,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         drawPlanePosZ(maxZ, minX, maxX, minY, maxY, buffer);
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawCube(final double minX, final double minY, final double minZ, final double maxX, final double maxY, final double maxZ, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         drawPlaneNegX(minX, minY, maxY, minZ, maxZ, r, g, b, a * 0.9f, buffer);
         drawPlanePosX(maxX, minY, maxY, minZ, maxZ, r, g, b, a * 0.9f, buffer);
@@ -178,7 +178,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         drawPlanePosZ(maxZ, minX, maxX, minY, maxY, r, g, b, a, buffer);
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegX(final double x, final double minY, final double maxY, final double minZ, final double maxZ, final BufferBuilder buffer) {
         buffer.pos(x, minY, minZ).endVertex();
         buffer.pos(x, minY, maxZ).endVertex();
@@ -186,7 +186,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(x, maxY, minZ).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegX(final double x, final double minY, final double maxY, final double minZ, final double maxZ, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(x, minY, minZ).color(r, g, b, a).endVertex();
         buffer.pos(x, minY, maxZ).color(r, g, b, a).endVertex();
@@ -194,7 +194,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(x, maxY, minZ).color(r, g, b, a).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosX(final double x, final double minY, final double maxY, final double minZ, final double maxZ, final BufferBuilder buffer) {
         buffer.pos(x, minY, minZ).endVertex();
         buffer.pos(x, maxY, minZ).endVertex();
@@ -202,7 +202,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(x, minY, maxZ).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosX(final double x, final double minY, final double maxY, final double minZ, final double maxZ, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(x, minY, minZ).color(r, g, b, a).endVertex();
         buffer.pos(x, maxY, minZ).color(r, g, b, a).endVertex();
@@ -210,7 +210,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(x, minY, maxZ).color(r, g, b, a).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegY(final double y, final double minX, final double maxX, final double minZ, final double maxZ, final BufferBuilder buffer) {
         buffer.pos(minX, y, minZ).endVertex();
         buffer.pos(maxX, y, minZ).endVertex();
@@ -218,7 +218,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(minX, y, maxZ).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegY(final double y, final double minX, final double maxX, final double minZ, final double maxZ, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(minX, y, minZ).color(r, g, b, a).endVertex();
         buffer.pos(maxX, y, minZ).color(r, g, b, a).endVertex();
@@ -226,7 +226,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(minX, y, maxZ).color(r, g, b, a).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosY(final double y, final double minX, final double maxX, final double minZ, final double maxZ, final BufferBuilder buffer) {
         buffer.pos(minX, y, minZ).endVertex();
         buffer.pos(minX, y, maxZ).endVertex();
@@ -234,7 +234,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(maxX, y, minZ).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosY(final double y, final double minX, final double maxX, final double minZ, final double maxZ, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(minX, y, minZ).color(r, g, b, a).endVertex();
         buffer.pos(minX, y, maxZ).color(r, g, b, a).endVertex();
@@ -242,7 +242,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(maxX, y, minZ).color(r, g, b, a).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegZ(final double z, final double minX, final double maxX, final double minY, final double maxY, final BufferBuilder buffer) {
         buffer.pos(minX, minY, z).endVertex();
         buffer.pos(minX, maxY, z).endVertex();
@@ -250,7 +250,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(maxX, minY, z).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlaneNegZ(final double z, final double minX, final double maxX, final double minY, final double maxY, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(minX, minY, z).color(r, g, b, a).endVertex();
         buffer.pos(minX, maxY, z).color(r, g, b, a).endVertex();
@@ -258,7 +258,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(maxX, minY, z).color(r, g, b, a).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosZ(final double z, final double minX, final double maxX, final double minY, final double maxY, final BufferBuilder buffer) {
         buffer.pos(minX, minY, z).endVertex();
         buffer.pos(maxX, minY, z).endVertex();
@@ -266,7 +266,7 @@ public abstract class AbstractScanResultProvider implements ScanResultProvider {
         buffer.pos(minX, maxY, z).endVertex();
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     protected static void drawPlanePosZ(final double z, final double minX, final double maxX, final double minY, final double maxY, final float r, final float g, final float b, final float a, final BufferBuilder buffer) {
         buffer.pos(minX, minY, z).color(r, g, b, a).endVertex();
         buffer.pos(maxX, minY, z).color(r, g, b, a).endVertex();

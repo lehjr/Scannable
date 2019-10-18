@@ -1,46 +1,46 @@
 package li.cil.scannable.client;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import li.cil.scannable.api.scanning.ScanResult;
 import li.cil.scannable.api.scanning.ScanResultProvider;
 import li.cil.scannable.client.renderer.ScannerRenderer;
 import li.cil.scannable.common.capabilities.CapabilityScanResultProvider;
+import li.cil.scannable.common.config.CommonConfig;
 import li.cil.scannable.common.config.Constants;
-import li.cil.scannable.common.config.Settings;
 import li.cil.scannable.common.init.Items;
 import li.cil.scannable.integration.optifine.ProxyOptiFine;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 
 import javax.annotation.Nullable;
 import java.util.*;
 
-@SideOnly(Side.CLIENT)
+@OnlyIn(Dist.CLIENT)
 public enum ScanManager {
     INSTANCE;
 
     // --------------------------------------------------------------------- //
 
     private static int computeTargetRadius() {
-        return Minecraft.getMinecraft().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE - Constants.SCAN_INITIAL_RADIUS;
+        return Minecraft.getInstance().gameSettings.renderDistanceChunks * Constants.CHUNK_SIZE - Constants.SCAN_INITIAL_RADIUS;
     }
 
     public static int computeScanGrowthDuration() {
-        return Constants.SCAN_GROWTH_DURATION * Minecraft.getMinecraft().gameSettings.renderDistanceChunks / Constants.REFERENCE_RENDER_DISTANCE;
+        return Constants.SCAN_GROWTH_DURATION * Minecraft.getInstance().gameSettings.renderDistanceChunks / Constants.REFERENCE_RENDER_DISTANCE;
     }
 
     public static float computeRadius(final long start, final float duration) {
@@ -85,19 +85,17 @@ public enum ScanManager {
 
     // --------------------------------------------------------------------- //
 
-    public void beginScan(final EntityPlayer player, final List<ItemStack> modules) {
+    public void beginScan(final PlayerEntity player, final List<ItemStack> modules) {
         cancelScan();
 
-        float scanRadius = Settings.getBaseScanRadius();
+        float scanRadius = CommonConfig.baseScanRadius.get();
 
         for (final ItemStack module : modules) {
-            final ScanResultProvider provider = module.getCapability(CapabilityScanResultProvider.SCAN_RESULT_PROVIDER_CAPABILITY, null);
-            if (provider != null) {
-                collectingProviders.add(provider);
-            }
+            module.getCapability(CapabilityScanResultProvider.SCAN_RESULT_PROVIDER_CAPABILITY)
+                    .ifPresent(provider-> collectingProviders.add(provider));
 
             if (Items.isModuleRange(module)) {
-                scanRadius += MathHelper.ceil(Settings.getBaseScanRadius() / 2f);
+                scanRadius += MathHelper.ceil(CommonConfig.baseScanRadius.get() / 2f);
             }
         }
 
@@ -263,7 +261,7 @@ public enum ScanManager {
             GlStateManager.matrixMode(GL11.GL_MODELVIEW);
             GlStateManager.pushMatrix();
 
-            Minecraft.getMinecraft().entityRenderer.setupCameraTransform(event.getPartialTicks(), 2);
+            Minecraft.getInstance().gameRenderer.setupCameraTransform(event.getPartialTicks());
             render(event.getPartialTicks());
 
             GlStateManager.matrixMode(GL11.GL_PROJECTION);
@@ -274,7 +272,7 @@ public enum ScanManager {
     }
 
     private void render(final float partialTicks) {
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
 
         final Entity entity = mc.getRenderViewEntity();
         if (entity == null) {
@@ -288,7 +286,7 @@ public enum ScanManager {
         frustum.setPosition(posX, posY, posZ);
 
         GlStateManager.bindTexture(0);
-        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.color4f(1, 1, 1, 1);
 
         // We render all results in batches, grouped by their provider.
         // This allows providers to do more optimized rendering, in e.g.

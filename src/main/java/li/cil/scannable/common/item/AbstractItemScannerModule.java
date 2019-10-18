@@ -1,30 +1,33 @@
 package li.cil.scannable.common.item;
 
+import li.cil.scannable.api.API;
+import li.cil.scannable.common.config.CommonConfig;
 import li.cil.scannable.common.config.Constants;
-import li.cil.scannable.common.config.Settings;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TranslationTextComponent;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 import javax.annotation.Nullable;
 import java.util.List;
 
 public abstract class AbstractItemScannerModule extends Item {
-    AbstractItemScannerModule() {
-        setMaxStackSize(1);
+    AbstractItemScannerModule(String registryName) {
+        super(new Properties().maxStackSize(1).group(API.creativeTab));
+        setRegistryName(registryName);
     }
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
-    public void addInformation(final ItemStack stack, @Nullable final World world, final List<String> tooltip, final ITooltipFlag flag) {
+    public void addInformation(final ItemStack stack, @Nullable final World world, final List<ITextComponent> tooltip, final ITooltipFlag flag) {
         super.addInformation(stack, world, tooltip, flag);
 
-        if (!Settings.useEnergy()) {
+        if (!CommonConfig.useEnergy.get()) {
             return;
         }
 
@@ -32,7 +35,7 @@ public abstract class AbstractItemScannerModule extends Item {
             return;
         }
 
-        final Minecraft mc = Minecraft.getMinecraft();
+        final Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) {
             return;
         }
@@ -42,6 +45,6 @@ public abstract class AbstractItemScannerModule extends Item {
             return;
         }
 
-        tooltip.add(I18n.format(Constants.TOOLTIP_MODULE_ENERGY_COST, cost));
+        tooltip.add(new TranslationTextComponent(Constants.TOOLTIP_MODULE_ENERGY_COST, cost));
     }
 }

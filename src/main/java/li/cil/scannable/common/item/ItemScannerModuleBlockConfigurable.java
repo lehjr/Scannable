@@ -1,30 +1,31 @@
 package li.cil.scannable.common.item;
 
+import li.cil.scannable.common.config.CommonConfig;
 import li.cil.scannable.common.config.Constants;
-import li.cil.scannable.common.config.Settings;
 import li.cil.scannable.common.init.Items;
 import li.cil.scannable.util.BlockUtils;
 import net.minecraft.block.Block;
-import net.minecraft.block.state.IBlockState;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Blocks;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumActionResult;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
+import net.minecraft.item.ItemUseContext;
+import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.NBTUtil;
+import net.minecraft.util.ActionResultType;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.IBlockAccess;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.world.IWorldReader;
 import net.minecraft.world.World;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -33,15 +34,20 @@ public final class ItemScannerModuleBlockConfigurable extends AbstractItemScanne
     private static final String TAG_BLOCK = "block";
     private static final String TAG_METADATA = "meta";
 
+    public ItemScannerModuleBlockConfigurable(String registryName) {
+        super(registryName);
+    }
+
     @SuppressWarnings("deprecation")
     @Nullable
-    public static IBlockState getBlockState(final ItemStack stack) {
+    public static BlockState getBlockState(final ItemStack stack) {
         if (!Items.isModuleBlock(stack)) {
             return null;
         }
 
-        final NBTTagCompound nbt = stack.getTagCompound();
-        if (nbt == null || !nbt.hasKey(TAG_BLOCK, NBT.TAG_STRING) || !nbt.hasKey(TAG_METADATA, NBT.TAG_INT)) {
+        final CompoundNBT nbt = stack.getOrCreateTag();
+
+        if (nbt == null || !nbt.contains(TAG_BLOCK, NBT.TAG_STRING)) {
             return null;
         }
 
@@ -51,16 +57,15 @@ public final class ItemScannerModuleBlockConfigurable extends AbstractItemScanne
             return null;
         }
 
-        final int blockMeta = nbt.getInteger(TAG_METADATA);
-        return block.getStateFromMeta(blockMeta);
+        return NBTUtil.readBlockState(nbt);
     }
 
-    private static void setBlockState(final ItemStack stack, final IBlockState state) {
-        final NBTTagCompound nbt;
-        if (!stack.hasTagCompound()) {
-            stack.setTagCompound(nbt = new NBTTagCompound());
+    private static void setBlockState(final ItemStack stack, final BlockState state) {
+        final CompoundNBT nbt;
+        if (!stack.hasTag()) {
+            stack.setTag(nbt = new CompoundNBT());
         } else {
-            nbt = stack.getTagCompound();
+            nbt = stack.getTag();
         }
 
         assert nbt != null;
@@ -70,57 +75,64 @@ public final class ItemScannerModuleBlockConfigurable extends AbstractItemScanne
             return;
         }
 
-        nbt.setString(TAG_BLOCK, blockName.toString());
-        nbt.setInteger(TAG_METADATA, state.getBlock().getMetaFromState(state));
+        nbt.putString(TAG_BLOCK, blockName.toString());
+        NBTUtil.writeBlockState(state);
     }
 
     // --------------------------------------------------------------------- //
     // Item
 
-    @SideOnly(Side.CLIENT)
+    @OnlyIn(Dist.CLIENT)
     @Override
-    public void addInformation(final ItemStack stack, @Nullable final World world, final List<String> tooltip, final ITooltipFlag flag) {
-        final IBlockState state = getBlockState(stack);
+    public void addInformation(final ItemStack stack, @Nullable final World worldIn, final List<ITextComponent> tooltip, final ITooltipFlag flag) {
+        final BlockState state = getBlockState(stack);
         if (state == null) {
-            tooltip.add(I18n.format(Constants.TOOLTIP_MODULE_BLOCK));
+            tooltip.add(new TranslationTextComponent(Constants.TOOLTIP_MODULE_BLOCK));
         } else {
-            final ItemStack blockStack = BlockUtils.getItemStackFromState(state, world);
+            final ItemStack blockStack = BlockUtils.getItemStackFromState(state, worldIn);
             if (!blockStack.isEmpty()) {
-                tooltip.add(I18n.format(Constants.TOOLTIP_MODULE_BLOCK_NAME, blockStack.getDisplayName()));
+                tooltip.add(new TranslationTextComponent(Constants.TOOLTIP_MODULE_BLOCK_NAME, blockStack.getDisplayName()));
             } else {
-                tooltip.add(I18n.format(Constants.TOOLTIP_MODULE_BLOCK_NAME, state.getBlock().getLocalizedName()));
+                tooltip.add(new TranslationTextComponent(Constants.TOOLTIP_MODULE_BLOCK_NAME, state.getBlock().getNameTextComponent()));
             }
         }
-        super.addInformation(stack, world, tooltip, flag);
+        super.addInformation(stack, worldIn, tooltip, flag);
     }
 
+
     @Override
-    public boolean doesSneakBypassUse(final ItemStack stack, final IBlockAccess world, final BlockPos pos, final EntityPlayer player) {
+    public boolean doesSneakBypassUse(ItemStack stack, IWorldReader world, BlockPos pos, PlayerEntity player) {
         return false;
     }
 
     @Override
-    public EnumActionResult onItemUse(final EntityPlayer player, final World world, final BlockPos pos, final EnumHand hand, final EnumFacing facing, final float hitX, final float hitY, final float hitZ) {
+    public ActionResultType onItemUse(ItemUseContext context) {
+        World world = context.getWorld();
+        BlockPos pos = context.getPos();
+        PlayerEntity player = context.getPlayer();
+        Hand hand = context.getHand();
+
+
         if (!world.isBlockLoaded(pos)) {
-            return EnumActionResult.PASS;
+            return ActionResultType.PASS;
         }
         if (world.isAirBlock(pos)) {
-            return EnumActionResult.PASS;
+            return ActionResultType.PASS;
         }
 
         final ItemStack stack = player.getHeldItem(hand);
-        final IBlockState state = world.getBlockState(pos).getActualState(world, pos);
+        final BlockState state = world.getBlockState(pos);
 
-        if (Settings.getBlockBlacklistSet().contains(state.getBlock())) {
+        if (CommonConfig.blockBlacklist.get().contains(state.getBlock())) {
             if (world.isRemote) {
-                Minecraft.getMinecraft().ingameGUI.getChatGUI().printChatMessageWithOptionalDeletion(new TextComponentTranslation(Constants.MESSAGE_BLOCK_BLACKLISTED), Constants.CHAT_LINE_ID);
+                Minecraft.getInstance().ingameGUI.getChatGUI().printChatMessageWithOptionalDeletion(new TranslationTextComponent(Constants.MESSAGE_BLOCK_BLACKLISTED), Constants.CHAT_LINE_ID);
             }
             player.getCooldownTracker().setCooldown(this, 10);
-            return EnumActionResult.SUCCESS;
+            return ActionResultType.SUCCESS;
         }
 
         setBlockState(stack, state);
 
-        return EnumActionResult.SUCCESS;
+        return ActionResultType.SUCCESS;
     }
 }
