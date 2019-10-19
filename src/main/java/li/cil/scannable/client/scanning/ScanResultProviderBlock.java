@@ -1,10 +1,6 @@
 package li.cil.scannable.client.scanning;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import gnu.trove.map.TIntIntMap;
-import gnu.trove.map.TObjectIntMap;
-import gnu.trove.map.hash.TIntIntHashMap;
-import gnu.trove.map.hash.TObjectIntHashMap;
 import li.cil.scannable.api.prefab.AbstractScanResultProvider;
 import li.cil.scannable.api.scanning.ScanResult;
 import li.cil.scannable.common.Scannable;
@@ -55,8 +51,7 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
     private static final float MIN_ALPHA = 0.13f; // Slightly > 0.1f/0.8f
     private static final float STATE_SCANNED_ALPHA = 0.7f;
     private static final Pattern STATE_DESC_PATTERN = Pattern.compile("(?<name>[^\\[]+)(?:\\[(?<properties>(?:[^,=\\]]+)=(?:[^,=\\]]+)(?:,(?:[^,=\\]]+)=(?:[^,=\\]]+))*)])?");
-
-    private final TIntIntMap blockColors = new TIntIntHashMap();
+    private final Map<Integer, Integer> blockColors = new HashMap<>();
     private final BitSet oresCommon = new BitSet();
     private final BitSet oresRare = new BitSet();
     private final BitSet fluids = new BitSet();
@@ -409,9 +404,8 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
 
         final long start = System.currentTimeMillis();
 
-        final TObjectIntMap<String> oreColorsByOreName = buildColorTable(ClientConfig.oreColors.get());
-        final TObjectIntMap<String> fluidColorsByFluidName = buildColorTable(ClientConfig.fluidColors.get());
-
+        final Map<ResourceLocation, Integer> oreColorsByOreName = buildColorTable(ClientConfig.oreColors.get());
+        final Map<ResourceLocation, Integer> fluidColorsByFluidName = buildColorTable(ClientConfig.fluidColors.get());
         final Set<String> oreNamesBlacklist = new HashSet<>(CommonConfig.oreBlacklist.get());
         final Set<String> oreNamesCommon = new HashSet<>(CommonConfig.oresCommon.get());
         final Set<String> oreNamesRare = new HashSet<>(CommonConfig.oresRare.get());
@@ -442,9 +436,6 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
                         }
 
                         if (oreNamesCommon.contains(name)) {
-
-
-
                             isCommon = true;
 
                             // Fixme: this is broken. We don't actually prefix with "Ore" anymore
@@ -499,9 +490,8 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
     }
 
     @OnlyIn(Dist.CLIENT)
-    private static TObjectIntMap<String> buildColorTable(final List<String> colorConfigs) {
-        final TObjectIntMap<String> colors = new TObjectIntHashMap<>();
-
+    private static Map<ResourceLocation, Integer> buildColorTable(final List<String> colorConfigs) {
+        final Map<ResourceLocation, Integer> colors = new HashMap<>();
         final Pattern pattern = Pattern.compile("^(?<name>[^\\s=]+)\\s*=\\s*0x(?<color>[a-fA-F0-9]+)$");
         for (final String colorConfig : colorConfigs) {
             final Matcher matcher = pattern.matcher(colorConfig.trim());
@@ -510,12 +500,10 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
                 continue;
             }
 
-            final String name = matcher.group("name");
+            final ResourceLocation name = new ResourceLocation(matcher.group("name"));
             final int color = Integer.parseInt(matcher.group("color"), 16);
-
             colors.put(name, color);
         }
-
         return colors;
     }
 

@@ -134,17 +134,17 @@ repositories {
     maven {
         url = "http://minecraft.curseforge.com/api/maven/"
     }
-    maven {
-        url = "https://mvnrepository.com/artifact/net.sf.trove4j/core"
-    }
+//    maven {
+//        url = "https://mvnrepository.com/artifact/net.sf.trove4j/core"
+//    }
 }
 
 dependencies {
     compileOnly fg.deobf("mezz.jei:jei-${project.minecraft_version}:${project.jei_version}:api")
     runtimeOnly fg.deobf("mezz.jei:jei-${project.minecraft_version}:${project.jei_version}")
 
-    // https://mvnrepository.com/artifact/gnu.trove/trove
-    compile group: 'net.sf.trove4j', name: 'core', version: '3.1.0'
+//    // https://mvnrepository.com/artifact/gnu.trove/trove
+//    compile group: 'net.sf.trove4j', name: 'core', version: '3.1.0'
 
 }
 
