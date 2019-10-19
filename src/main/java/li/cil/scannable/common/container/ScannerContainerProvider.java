@@ -6,12 +6,10 @@ import net.minecraft.inventory.container.Container;
 import net.minecraft.inventory.container.INamedContainerProvider;
 import net.minecraft.util.Hand;
 import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.StringTextComponent;
 
 import javax.annotation.Nullable;
 
-/**
- * @author lehjr
- */
 public class ScannerContainerProvider implements INamedContainerProvider {
     Hand hand;
     public ScannerContainerProvider(Hand handIn) {
@@ -20,7 +18,7 @@ public class ScannerContainerProvider implements INamedContainerProvider {
 
     @Override
     public ITextComponent getDisplayName() {
-        return null;
+        return new StringTextComponent("Scanner GUI");
     }
 
     @Nullable

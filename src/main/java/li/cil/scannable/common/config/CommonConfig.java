@@ -141,23 +141,22 @@ public class CommonConfig {
                     .translation(Constants.CONFIG_ORES_COMMON)
                     .worldRestart()
                     .define("oresCommon", Arrays.asList(
-                            // Minecraft
-                            "oreCoal",
-                            "oreIron",
-                            "oreRedstone",
-                            "glowstone",
+                            "forge:ores/coal",
+                            "forge:ores/iron",
+                            "forge:ores/redstone",
+                            "minecraft:glowstone",
 
                             // Thermal Foundation
-                            "oreCopper",
-                            "oreTin",
-                            "oreLead",
+                            "forge:ores/copper",
+                            "/tin",
+                            "forge:ores/lead",
 
                             // Immersive Engineering
-                            "oreAluminum",
-                            "oreAluminium",
+                            "forge:ores/aluminum",
+                            "forge:ores/aluminium",
 
                             // Thaumcraft
-                            "oreCinnabar"
+                            "forge:ores/cinnabar"
                     ));
 
             oresRare = builder

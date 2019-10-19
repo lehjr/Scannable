@@ -43,6 +43,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class ScanResultProviderBlock extends AbstractScanResultProvider {
     public static final ScanResultProviderBlock INSTANCE = new ScanResultProviderBlock();
@@ -142,7 +143,9 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
     @Override
     public void computeScanResults(final Consumer<ScanResult> callback) {
         final World world = player.getEntityWorld();
-        final List<String> blacklist = CommonConfig.blockBlacklist.get();
+        final List<ResourceLocation> blacklist = CommonConfig.blockBlacklist.get().stream().map(name -> new ResourceLocation(name)).collect(Collectors.toList());
+
+        blockLoop:
         for (int i = 0; i < blocksPerTick; i++) {
             if (!moveNext(world)) {
                 return;
@@ -155,14 +158,16 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
             final BlockPos pos = new BlockPos(x, y, z);
             BlockState state = world.getBlockState(pos);
 
-            if (blacklist.contains(state.getBlock())) {
+            // registry name
+            if (blacklist.contains(state.getBlock().getRegistryName())) {
                 continue;
             }
 
-//            state = state.getActualState(world, pos);
-
-            if (blacklist.contains(state.getBlock())) {
-                continue;
+            //tags are also resource locations
+            for (ResourceLocation location : state.getBlock().getTags()) {
+                if (blacklist.contains(location)) {
+                    continue blockLoop;
+                }
             }
 
             final int stateId = Block.getStateId(state);
@@ -208,6 +213,9 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
     @OnlyIn(Dist.CLIENT)
     @Override
     public void render(final Entity entity, final List<ScanResult> results, final float partialTicks) {
+        System.out.println("results: " + results.size());
+
+
         final double posX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
         final double posY = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks;
         final double posZ = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks;
@@ -234,6 +242,8 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
             final ScanResultOre resultOre = (ScanResultOre) result;
 
             if (resultOre.bounds.contains(viewerEyes)) {
+                System.out.println(resultOre.getPosition());
+
                 nonCulledResults.add(resultOre);
                 continue;
             }
@@ -257,8 +267,8 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
             final float a = Math.max(MIN_ALPHA, Math.max(BASE_ALPHA, resultOre.getAlphaOverride()) * focusScale);
 
             drawCube(resultOre.bounds.minX, resultOre.bounds.minY, resultOre.bounds.minZ,
-                     resultOre.bounds.maxX, resultOre.bounds.maxY, resultOre.bounds.maxZ,
-                     r, g, b, a, buffer);
+                    resultOre.bounds.maxX, resultOre.bounds.maxY, resultOre.bounds.maxZ,
+                    r, g, b, a, buffer);
         }
 
         tessellator.draw();
@@ -288,8 +298,8 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
                 final float a = Math.max(MIN_ALPHA, Math.max(BASE_ALPHA, resultOre.getAlphaOverride()) * focusScale);
 
                 drawCube(resultOre.bounds.minX, resultOre.bounds.minY, resultOre.bounds.minZ,
-                         resultOre.bounds.maxX, resultOre.bounds.maxY, resultOre.bounds.maxZ,
-                         r, g, b, a, buffer);
+                        resultOre.bounds.maxX, resultOre.bounds.maxY, resultOre.bounds.maxZ,
+                        r, g, b, a, buffer);
             }
 
             tessellator.draw();
@@ -409,7 +419,7 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
         final Set<String> stateDescsRare = new HashSet<>(CommonConfig.statesRare.get());
         final Set<String> fluidBlacklist = new HashSet<>(CommonConfig.blockBlacklist.get());
 
-        final Pattern pattern = Pattern.compile("^ore[A-Z].*$");
+        final Pattern pattern = Pattern.compile("^ore[a-z].*$");
         for (final Block block : ForgeRegistries.BLOCKS.getValues()) {
             for (final BlockState state : block.getStateContainer().getValidStates()) {
                 final int stateId = Block.getStateId(state);
@@ -420,6 +430,10 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
                     boolean isRare = false;
                     boolean isCommon = false;
                     for (final ResourceLocation id : ids) {
+
+                        System.out.println("id: " + id);
+
+
                         final String name = id.toString();
                         if (oreNamesBlacklist.contains(name)) {
                             isRare = false;
@@ -428,6 +442,9 @@ public final class ScanResultProviderBlock extends AbstractScanResultProvider {
                         }
 
                         if (oreNamesCommon.contains(name)) {
+
+
+
                             isCommon = true;
 
                             // Fixme: this is broken. We don't actually prefix with "Ore" anymore

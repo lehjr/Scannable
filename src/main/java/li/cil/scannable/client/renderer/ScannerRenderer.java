@@ -29,7 +29,6 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.resource.IResourceType;
 import net.minecraftforge.resource.ISelectiveResourceReloadListener;
-import org.apache.commons.io.IOUtils;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL14;
@@ -41,7 +40,6 @@ import javax.vecmath.Matrix4f;
 import javax.vecmath.Vector3f;
 import javax.vecmath.Vector4f;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.function.Predicate;
 
@@ -49,9 +47,8 @@ import java.util.function.Predicate;
 public enum ScannerRenderer {
     INSTANCE;
 
-    final boolean isStencilEnabled = false; // Fixme: experimental
+    final boolean isStencilEnabled = false; // Fixme: enabling this breaks everything
     ShaderReloader shaderReloader = new ShaderReloader();
-
 
     // --------------------------------------------------------------------- //
     // Settings

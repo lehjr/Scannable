@@ -1,6 +1,7 @@
 package li.cil.scannable.network.packets;
 
 import li.cil.scannable.client.renderer.ScannerRenderer;
+import li.cil.scannable.client.scanning.ScanResultProviderBlock;
 import net.minecraft.network.PacketBuffer;
 import net.minecraftforge.fml.network.NetworkEvent;
 
@@ -23,6 +24,7 @@ public class ClientOnLoginPacket {
     public static void handle(ClientOnLoginPacket message, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             ScannerRenderer.INSTANCE.init();
+            ScanResultProviderBlock.INSTANCE.rebuildOreCache();
         });
         ctx.get().setPacketHandled(true);
     }
